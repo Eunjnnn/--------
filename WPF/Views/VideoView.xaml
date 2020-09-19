@@ -1,0 +1,32 @@
+﻿<UserControl x:Class="WPF.Views.VideoView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 xmlns:ViewModels="clr-namespace:WPF.ViewModels"
+			 xmlns:Converters="clr-namespace:WPF.Converters"
+			 mc:Ignorable="d"
+			 d:DataContext="{d:DesignInstance ViewModels:VideoViewModel}">
+    <DockPanel MaxWidth="500">
+        <Image Source="{Binding Video.Id, Mode=OneWay,
+                Converter={x:Static Converters:IdToThumbnailConverter.Default}}"
+               Width="100" Margin="0, 0, 5, 0"/>
+
+        <StackPanel VerticalAlignment="Center">
+            <TextBlock Text="{Binding Video.Title, Mode=OneWay}" FontSize="16"
+                       FontWeight="DemiBold"/>
+
+            <TextBlock Text="{Binding Video.Channel, Mode=OneWay}" 
+                       Foreground="#9E9E9E"/>
+
+            <TextBlock Foreground="#9E9E9E">
+                <Run
+                    Text="{Binding Video.DateUploaded, Mode=OneWay,
+                            StringFormat={}{0:dd/MM/yyyy}}"/>
+                •
+                <Run Text="{Binding Video.Views, Mode=OneWay,
+                            StringFormat=N0}"/>
+            </TextBlock>
+        </StackPanel>
+    </DockPanel>
+</UserControl>

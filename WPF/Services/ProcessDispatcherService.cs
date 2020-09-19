@@ -1,0 +1,145 @@
+﻿namespace WPF.Services
+{
+    using System;
+    using System.Collections.Generic;
+    using System.IO;
+    using System.Linq;
+
+    using Caliburn.Micro;
+
+    using WPF.Extensions;
+    using WPF.Factories.Interfaces;
+    using WPF.Models;
+    using WPF.Models.Download;
+    using WPF.Services.Interfaces;
+    using WPF.Utilities;
+    using WPF.Utilities.Processing;
+    using WPF.ViewModels.Interfaces;
+    using WPF.ViewModels.Interfaces.Process;
+    using WPF.ViewModels.Interfaces.Process.Entities;
+
+    internal class ProcessDispatcherService : IProcessDispatcherService
+    {
+        private readonly IEventAggregator _eventAggregator;
+
+        private readonly IProcessFactory _processFactory;
+
+        private readonly Settings _settings;
+
+        public ProcessDispatcherService(IEventAggregator eventAggregator, IProcessFactory processFactory, ISettingsService settingsService)
+        {
+            _eventAggregator = eventAggregator;
+            _processFactory = processFactory;
+            _settings = settingsService.Settings;
+        }
+
+        public void Dispatch(IEnumerable<IViewModelBase> viewModels)
+        {
+            foreach (IViewModelBase viewModel in viewModels)
+            {
+                Dispatch(viewModel);
+            }
+        }
+
+        public void Dispatch(IViewModelBase viewModel)
+        {
+            ProcessTransferType nextTransfer;
+            IProcessViewModel dispatch;
+
+            void DispatchToDownload(IVideoViewModel videoViewModel)
+            {
+                nextTransfer = ProcessTransferType.Download;
+                dispatch = _processFactory.MakeDownloadProcessViewModel(videoViewModel);
+            }
+
+            void DispatchToComplete(IVideoViewModel videoViewModel, DownloadState downloadState)
+            {
+                nextTransfer = ProcessTransferType.Complete;
+                dispatch = _processFactory.MakeCompleteProcessViewModel(videoViewModel, downloadState);
+            }
+
+            switch (viewModel)
+            {
+                case IVideoViewModel videoViewModel:
+                    {
+                        string videoTitle = videoViewModel.Video.Title;
+
+                        if (Directory.GetFiles(_settings.DownloadPath).Select(Path.GetFileNameWithoutExtension).Any(filename => filename == videoTitle))
+                        {
+                            DispatchToComplete(videoViewModel, DownloadState.Exited);
+                        }
+                        else
+                        {
+                            DispatchToDownload(videoViewModel);
+                        }
+                    }
+                    break;
+
+                case IDownloadProcessViewModel downloadProcessViewModel:
+                    {
+                        if (downloadProcessViewModel.Process.Killed)
+                        {
+                            DispatchToComplete(downloadProcessViewModel.VideoViewModel, DownloadState.Exited);
+                            break;
+                        }
+
+                        string destinationFilename = (string)downloadProcessViewModel.Process.ProcessMonitor.ParameterMonitorings["Destination"].Value;
+
+                        FileInfo fileInfo = new FileInfo(destinationFilename);
+
+                        if (_settings.OutputFormat == OutputFormat.Auto ||
+                            _settings.OutputFormat == OutputFormat.Mp4 && fileInfo.Extension == ".mp4" ||
+                            _settings.OutputFormat == OutputFormat.Mp3 && fileInfo.Extension == ".mp3")
+                        {
+                            DispatchToComplete(downloadProcessViewModel.VideoViewModel, DownloadState.Completed);
+                        }
+                        else
+                        {
+                            nextTransfer = ProcessTransferType.Convert;
+
+                            ConvertProgress convertProgress = new ConvertProgress(fileInfo.Length);
+                            ConvertProcess convertProcess = new ConvertProcess(fileInfo.FullName, _settings.OutputFormat.ToString().ToLower(), convertProgress);
+
+                            dispatch = _processFactory.MakeConvertProcessViewModel(downloadProcessViewModel.VideoViewModel, convertProcess, convertProgress);
+                        }
+                    }
+                    break;
+
+                case IConvertProcessViewModel convertProcessViewModel:
+                    DispatchToComplete(convertProcessViewModel.VideoViewModel, convertProcessViewModel.Process.Killed ? DownloadState.Exited : DownloadState.Completed);
+                    break;
+
+                default:
+                    throw new InvalidOperationException("Cannot dispatch non-download or non-convert process.");
+            }
+
+            if (dispatch is IActiveProcessViewModel activeProcessViewModel)
+            {
+                void ProcessStarted(object sender, EventArgs e)
+                {
+                    switch (dispatch)
+                    {
+                        case IDownloadProcessViewModel _:
+                            dispatch.DownloadState = DownloadState.Downloading;
+                            break;
+
+                        case IConvertProcessViewModel _:
+                            dispatch.DownloadState = DownloadState.Converting;
+                            break;
+                    }
+                }
+
+                void ProcessExited(object sender, EventArgs e)
+                {
+                    activeProcessViewModel.Process.Started -= ProcessStarted;
+                    activeProcessViewModel.Process.Exited -= ProcessExited;
+                }
+
+                activeProcessViewModel.Process.Started += ProcessStarted;
+                activeProcessViewModel.Process.Exited += ProcessExited;
+            }
+
+            _eventAggregator.BeginPublishOnUIThread(new ProcessTransferMessage(nextTransfer, dispatch.ToEnumerable()));
+        }
+    }
+}

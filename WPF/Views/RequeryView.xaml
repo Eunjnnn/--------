@@ -1,0 +1,47 @@
+﻿<UserControl x:Class="WPF.Views.RequeryView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:Caliburn="http://www.caliburnproject.org"
+             xmlns:Helpers="clr-namespace:WPF.Helpers"
+             xmlns:ViewModels="clr-namespace:WPF.ViewModels"
+             mc:Ignorable="d"
+			 d:DataContext="{d:DesignInstance ViewModels:RequeryViewModel}"
+             Width="600" Height="800">
+    <DockPanel>
+        <ContentControl DockPanel.Dock="Top" Caliburn:View.Model="{Binding NewVideo, Mode=OneWay}" Margin="5"/>
+
+        <DockPanel DockPanel.Dock="Top">
+            <Button DockPanel.Dock="Right" Content="Search" Width="75" Margin="5"
+                    Caliburn:Message.Attach="Search"/>
+            <TextBox Text="{Binding Query}" Margin="5"/>
+        </DockPanel>
+
+        <DockPanel DockPanel.Dock="Bottom" HorizontalAlignment="Stretch">
+            <Button Content="Cancel" Width="100" Margin="5"
+                    Helpers:ImageContentHelper.Image="{StaticResource Delete}"
+                    Caliburn:Message.Attach="Cancel"/>
+
+            <Button Content="Exchange" HorizontalAlignment="Right" Width="100" Margin="5"
+                    Helpers:ImageContentHelper.Image="{StaticResource Exchange}"
+                    Caliburn:Message.Attach="Exchange"/>
+        </DockPanel>
+
+        <ListBox x:Name="Results" BorderThickness="0" SelectedItem="{Binding SelectedMatch}">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                    <Setter Property="ContextMenu">
+                        <Setter.Value>
+                            <ContextMenu Caliburn:Action.TargetWithoutContext="{Binding Mode=OneTime}">
+                                <MenuItem Header="Open in YouTube"
+                                          Helpers:ImageContentHelper.Image="{StaticResource PlayButton}"
+                                          Caliburn:Message.Attach="OpenInYouTube"/>
+                            </ContextMenu>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ListBox.ItemContainerStyle>
+        </ListBox>
+    </DockPanel>
+</UserControl>
